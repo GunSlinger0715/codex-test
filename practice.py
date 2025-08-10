@@ -1,1 +1,2 @@
-#This is a test file for Codex Practice"
+
+print("Hello, GitHub!")
