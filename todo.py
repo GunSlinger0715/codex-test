@@ -33,7 +33,6 @@ def parse_date(s: str) -> Optional[str]:
     if not s:
         return None
     try:
-        # validate and normalize to YYYY-MM-DD
         return dt.date.fromisoformat(s).isoformat()
     except ValueError:
         print("⚠️ Invalid date. Use YYYY-MM-DD or leave blank.")
