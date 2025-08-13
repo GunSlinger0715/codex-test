@@ -28,36 +28,30 @@ def save_tasks(tasks: List[Task]) -> None:
 def next_id(tasks: List[Task]) -> int:
     return (max((t.id for t in tasks), default=0) + 1)
 
-def prompt_due_date(current: Optional[str] = None) -> Optional[str]:
-    while True:
-        if current is not None:
-            due_str = input(
-                f"Due date (YYYY-MM-DD, blank keeps '{current}', 'none' clears): "
-            ).strip()
-            if not due_str:
-                return current
-            if due_str.lower() == "none":
-                return None
-        else:
-            due_str = input("Due date (YYYY-MM-DD, optional): ").strip()
-            if not due_str:
-                return None
-        try:
-            dt.datetime.strptime(due_str, "%Y-%m-%d")
-            return due_str
-        except ValueError:
-            print("⚠️ Invalid date; use YYYY-MM-DD.")
+def parse_date(s: str) -> Optional[str]:
+    s = s.strip()
+    if not s:
+        return None
+    try:
+        return dt.date.fromisoformat(s).isoformat()
+    except ValueError:
+        print("⚠️ Invalid date. Use YYYY-MM-DD or leave blank.")
+        return None
 
 def add_task(tasks: List[Task]):
     title = input("Task title: ").strip()
     if not title:
         print("⚠️ Title required.")
         return
-    pr = input("Priority [low/med/high] (default med): ").strip().lower() or "med"
+    pr = (input("Priority [low/med/high] (default med): ").strip().lower() or "med")
     if pr not in PRIORITIES:
         print("⚠️ Invalid priority; defaulting to 'med'.")
         pr = "med"
-    due = prompt_due_date()
+    while True:
+        due_in = input("Due date (YYYY-MM-DD, optional): ")
+        due = parse_date(due_in)
+        if due_in == "" or due is not None:
+            break
     t = Task(id=next_id(tasks), title=title, priority=pr, due=due)
     tasks.append(t)
     save_tasks(tasks)
@@ -87,37 +81,51 @@ def mark_done(tasks: List[Task]):
             return
     print("⚠️ Not found.")
 
-def edit_task(tasks: List[Task]):
-    try:
-        tid = int(input("Task ID: "))
-    except ValueError:
-        print("⚠️ Enter a number.")
-        return
-    for t in tasks:
-        if t.id == tid:
-            title = input(f"Title [{t.title}]: ").strip() or t.title
-            pr = input(f"Priority [low/med/high] [{t.priority}]: ").strip().lower()
-            if pr:
-                if pr in PRIORITIES:
-                    t.priority = pr
-                else:
-                    print("⚠️ Invalid priority; keeping current.")
-            t.due = prompt_due_date(t.due)
-            t.title = title
-            save_tasks(tasks)
-            print(f"✏️ Edited #{tid}.")
-            return
-    print("⚠️ Not found.")
-
 def remove_task(tasks: List[Task]):
     try:
         tid = int(input("Task ID: "))
     except ValueError:
         print("⚠️ Enter a number.")
         return
+    before = len(tasks)
     tasks[:] = [t for t in tasks if t.id != tid]
     save_tasks(tasks)
-    print(f"🗑️ Removed #{tid}.")
+    if len(tasks) < before:
+        print(f"🗑️ Removed #{tid}.")
+    else:
+        print("⚠️ Not found.")
+
+def edit_task(tasks: List[Task]):
+    try:
+        tid = int(input("Task ID to edit: "))
+    except ValueError:
+        print("⚠️ Enter a number.")
+        return
+    t = next((x for x in tasks if x.id == tid), None)
+    if not t:
+        print("⚠️ Not found.")
+        return
+
+    new_title = input(f"New title (blank to keep '{t.title}'): ").strip() or t.title
+    pr_in = input(f"New priority [low/med/high] (current {t.priority}): ").strip().lower()
+    if pr_in and pr_in not in PRIORITIES:
+        print("⚠️ Invalid priority; keeping current.")
+        pr_in = t.priority
+    new_pr = pr_in or t.priority
+
+    while True:
+        due_in = input(f"New due date (YYYY-MM-DD or blank; current {t.due or '—'}): ")
+        if due_in == "":
+            new_due = t.due
+            break
+        parsed = parse_date(due_in)
+        if parsed is not None:
+            new_due = parsed
+            break
+
+    t.title, t.priority, t.due = new_title, new_pr, new_due
+    save_tasks(tasks)
+    print(f"✏️ Updated #{t.id}.")
 
 def menu():
     tasks = load_tasks()
@@ -125,13 +133,13 @@ def menu():
         "1": ("Add task", lambda: add_task(tasks)),
         "2": ("List tasks", lambda: list_tasks(tasks)),
         "3": ("Mark complete", lambda: mark_done(tasks)),
-        "4": ("Edit task", lambda: edit_task(tasks)),
-        "5": ("Remove task", lambda: remove_task(tasks)),
+        "4": ("Remove task", lambda: remove_task(tasks)),
+        "5": ("Edit task", lambda: edit_task(tasks)),
         "0": ("Exit", None),
     }
     while True:
         print("\n=== To-Do List ===")
-        for k, (label, _) in actions.items():
+        for k,(label,_) in actions.items():
             print(f"{k}. {label}")
         choice = input("Choose: ").strip()
         if choice == "0":
