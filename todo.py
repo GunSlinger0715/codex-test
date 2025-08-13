@@ -1,9 +1,33 @@
 import json, os, datetime as dt
 from dataclasses import dataclass, asdict
 from typing import List, Optional
+from colorama import Fore, Style, init
+init(autoreset=True)
 
 DATA_FILE = "tasks.json"
 PRIORITIES = ["low", "med", "high"]
+
+def color_priority(priority: str) -> str:
+    if priority == "high":
+        return Fore.RED + priority + Style.RESET_ALL
+    elif priority == "med":
+        return Fore.YELLOW + priority + Style.RESET_ALL
+    elif priority == "low":
+        return Fore.GREEN + priority + Style.RESET_ALL
+    return priority
+
+# --- Sorting helpers / constants ---
+PRI_ORDER = {"high": 0, "med": 1, "low": 2}
+
+def sort_tasks(rows: List["Task"]) -> List["Task"]:
+    def key(t: "Task"):
+        pri = PRI_ORDER.get(t.priority, 99)
+        due = dt.date.fromisoformat(t.due) if t.due else dt.date.max
+        done = 1 if t.completed else 0   # OPEN first, DONE later
+        return (done, pri, due, t.id)
+    return sorted(rows, key=key)
+
+
 
 @dataclass
 class Task:
@@ -57,15 +81,48 @@ def add_task(tasks: List[Task]):
     save_tasks(tasks)
     print(f"✅ Added #{t.id}: {t.title}")
 
-def list_tasks(tasks: List[Task]):
-    if not tasks:
-        print("📭 No tasks.")
+def list_tasks(tasks: List[Task], status: str = "all", pri: Optional[str] = None):
+    # Filter by status
+    if status == "open":
+        rows = [t for t in tasks if not t.completed]
+    elif status == "done":
+        rows = [t for t in tasks if t.completed]
+    else:
+        rows = list(tasks)
+
+    # Optional priority filter
+    if pri in {"low", "med", "high"}:
+        rows = [t for t in rows if t.priority == pri]
+
+    # Sort: OPEN first → high→med→low → earliest due date → id
+    rows = sort_tasks(rows)
+
+    if not rows:
+        print("📋 No tasks.")
         return
-    print("\nID  Status  Pri  Due        Title")
-    for t in tasks:
-        status = "DONE" if t.completed else "OPEN"
+
+    # Colored header
+    print(Fore.CYAN + Style.BRIGHT + "\nID  Status  Pri  Due        Title" + Style.RESET_ALL)
+
+    for t in rows:
+        # Status: bold green for DONE
+        status_txt = "DONE" if t.completed else "OPEN"
+        if t.completed:
+            status_txt = Style.BRIGHT + Fore.GREEN + "DONE" + Style.RESET_ALL
+
+        # Priority color
+        if t.priority == "high":
+            pri_color = Fore.RED + t.priority[:3]
+        elif t.priority == "med":
+            pri_color = Fore.YELLOW + t.priority[:3]
+        else:
+            pri_color = Fore.GREEN + t.priority[:3]
+
         due = t.due or "—"
-        print(f"{t.id:<3} {status:<6}  {t.priority[:3]:<3}  {due:<10} {t.title}")
+        print(f"{t.id:<3} {status_txt:<6} {pri_color:<3} {Style.RESET_ALL}{due:<10} {t.title}")
+
+
+
 
 def mark_done(tasks: List[Task]):
     try:
@@ -127,11 +184,23 @@ def edit_task(tasks: List[Task]):
     save_tasks(tasks)
     print(f"✏️ Updated #{t.id}.")
 
+def list_menu(tasks: List[Task]):
+    print("\nFilter by status: [A]ll, [O]pen, [D]one")
+    s = input("Choose status (A/O/D, default A): ").strip().lower()
+    status = {"o": "open", "d": "done", "a": "all", "": "all"}.get(s, "all")
+
+    p = input("Priority filter (low/med/high or blank): ").strip().lower()
+    pri = p if p in {"low", "med", "high"} else None
+
+    list_tasks(tasks, status=status, pri=pri)
+
+
+
 def menu():
     tasks = load_tasks()
     actions = {
         "1": ("Add task", lambda: add_task(tasks)),
-        "2": ("List tasks", lambda: list_tasks(tasks)),
+        "2": ("List tasks", lambda: list_menu(tasks)),
         "3": ("Mark complete", lambda: mark_done(tasks)),
         "4": ("Remove task", lambda: remove_task(tasks)),
         "5": ("Edit task", lambda: edit_task(tasks)),
