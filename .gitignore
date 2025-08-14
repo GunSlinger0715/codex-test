@@ -1,4 +1,10 @@
 security-report/
 __pycache__/
 *.pyc
+# Java build artifacts
+**/*.class
+java-sandbx/bin/
+# VS Code workspace
+.vscode/
+
 
